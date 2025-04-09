@@ -57,6 +57,12 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
   shadowElt: HTMLDivElement | null = null;
   htmlGraphics: ReturnType<typeof this.getHtmlGraphics> | null = null;
 
+  // Add these new properties
+  latestHoverPayload: DataHoverPayload | null = null; // To store the last hover payload
+  keyPressListener: ((e: KeyboardEvent) => void) | null = null;
+  clickListener: ((e: MouseEvent) => void) | null = null;
+  isXKeyPressed = false;
+
   getHtmlGraphics({ dynamicData = false, dynamicFieldDisplayValues = false, dynamicProps = false } = {}) {
     const data = dynamicData ? this.data : { ...this.props.data };
     const props = dynamicProps ? this.dynamicProps : { ...this.props };
@@ -255,6 +261,22 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
       triggerPanelupdate(this.shadowElt);
     }
 
+    // Set up event listeners for keyboard and mouse
+    this.keyPressListener = this.handleKeyPress.bind(this);
+    this.clickListener = this.handleClick.bind(this);
+
+    window.addEventListener('keydown', this.keyPressListener);
+    window.addEventListener('keyup', this.keyPressListener);
+    window.addEventListener('click', this.clickListener);
+
+    // Set up data hover subscription
+    if (this.props.eventBus) {
+      this.dataHoverSubscription = this.props.eventBus.getStream(DataHoverEvent).subscribe((event) => {
+        // Store the payload but don't execute handler yet
+        this.latestHoverPayload = event.payload;
+      });
+    }
+
     // EXTENSIVE EVENT BUS DEBUGGING
     console.error('DEBUGGING: Component mounted, examining event bus');
     console.error('Event bus available:', !!this.props.eventBus);
@@ -304,11 +326,38 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
   componentWillUnmount() {
     triggerPanelwillunmount(this.shadowElt);
 
+    // Clean up event listeners
+    if (this.keyPressListener) {
+      window.removeEventListener('keydown', this.keyPressListener);
+      window.removeEventListener('keyup', this.keyPressListener);
+    }
+
+    if (this.clickListener) {
+      window.removeEventListener('click', this.clickListener);
+    }
+
     // Properly unsubscribe
     if (this.dataHoverSubscription) {
       console.error('Cleaning up DataHoverEvent subscription');
       this.dataHoverSubscription.unsubscribe();
       this.dataHoverSubscription = undefined;
+    }
+  }
+
+  // Handle key press events to track X key state
+  handleKeyPress(e: KeyboardEvent) {
+    if (e.type === 'keydown' && e.key.toLowerCase() === 'x') {
+      this.isXKeyPressed = true;
+    } else if (e.type === 'keyup' && e.key.toLowerCase() === 'x') {
+      this.isXKeyPressed = false;
+    }
+  }
+
+  // Handle click events to execute onDataHover if X is pressed
+  handleClick(e: MouseEvent) {
+    if (this.isXKeyPressed && this.latestHoverPayload && this.props.options.onDataHover) {
+      console.error('X key + click detected, executing onDataHover with payload:', this.latestHoverPayload);
+      this.executeDataHoverScript(this.latestHoverPayload);
     }
   }
 
@@ -438,13 +487,10 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
   dataHoverSubscription?: Subscription;
   hoverPayload: DataHoverPayload | null = null;
 
-  // Add a method to handle the hover event
+  // Replace the old handleDataHover method with this one
   handleDataHover = (event: DataHoverEvent) => {
-    console.error('DataHoverEvent handler executing with payload:', event.payload);
-
-    if (this.props.options.onDataHover) {
-      this.executeDataHoverScript(event.payload);
-    }
+    // Just store the payload for later use
+    this.latestHoverPayload = event.payload;
   };
 
   // Add method to execute the onDataHover script
