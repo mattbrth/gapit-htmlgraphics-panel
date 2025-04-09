@@ -1,0 +1,216 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 3,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana-testdata-datasource",
+        "uid": "trlxrdZVk"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "SVGBaseFix": true,
+        "add100Percentage": true,
+        "calcsMutation": "standard",
+        "centerAlignContent": true,
+        "codeData": "{\n  \"text\": \"Random text\"\n}",
+        "css": "* {\n  font-family: 'Open Sans', sans-serif;\n}\n\n.hover-container {\n  width: 100%;\n  height: 100%;\n  padding: 15px;\n  border-radius: 5px;\n  background-color: rgba(20, 20, 20, 0.7);\n  color: #d8d9da;\n}\n\n.title {\n  font-size: 16px;\n  font-weight: bold;\n  margin-bottom: 15px;\n  text-align: center;\n  color: #00b0ff;\n}\n\n.hover-info {\n  display: flex;\n  justify-content: space-between;\n  margin-bottom: 10px;\n  padding: 8px;\n  background: rgba(30, 30, 30, 0.5);\n  border-radius: 3px;\n}\n\n.label {\n  font-weight: 500;\n}\n\n.value {\n  font-weight: bold;\n}\n\n.status {\n  margin-top: 15px;\n  font-style: italic;\n  text-align: center;\n  color: #999;\n}\n\n/* Animation for active hover */\n@keyframes pulse {\n  0% { opacity: 0.7; }\n  50% { opacity: 1; }\n  100% { opacity: 0.7; }\n}\n\n.active-hover {\n  animation: pulse 1.5s infinite;\n  color: #5ac8fa;\n}",
+        "dynamicData": false,
+        "dynamicFieldDisplayValues": false,
+        "dynamicHtmlGraphics": false,
+        "dynamicProps": false,
+        "html": "<div class=\"hover-container\">\n  <div class=\"title\">Data Hover Information</div>\n  <div class=\"hover-info\">\n    <div class=\"label\">Hover Time:</div>\n    <div id=\"hover-time\" class=\"value\">No hover data yet</div>\n  </div>\n  <div class=\"hover-info\">\n    <div class=\"label\">Value:</div>\n    <div id=\"hover-value\" class=\"value\">-</div>\n  </div>\n  <div class=\"status\" id=\"hover-status\">Move cursor over chart points</div>\n</div>",
+        "onDataHover": "// Clear any existing timeout to prevent flicker\nif (htmlGraphics.hoverTimeout) {\n  clearTimeout(htmlGraphics.hoverTimeout);\n}\n\n// Elements to update\nconst hoverTimeElement = htmlNode.getElementById('hover-time');\nconst hoverValueElement = htmlNode.getElementById('hover-value');\nconst hoverStatusElement = htmlNode.getElementById('hover-status');\n\nif (hoverPayload && hoverPayload.point) {\n  // Update last hover timestamp\n  htmlGraphics.lastHoverTimestamp = Date.now();\n  \n  // Check if time exists in the hover payload\n  if (hoverPayload.point.time !== undefined) {\n    const hoverTime = new Date(hoverPayload.point.time);\n    hoverTimeElement.textContent = hoverTime.toLocaleString();\n    \n    // Show active status\n    hoverStatusElement.textContent = 'Hovering over data point';\n    hoverStatusElement.classList.add('active-hover');\n    \n    // If we have a data value, display it\n    if (hoverPayload.data && hoverPayload.rowIndex !== undefined) {\n      const valueField = hoverPayload.data.fields.find(f => f.type === 'number');\n      if (valueField) {\n        const value = valueField.values.get(hoverPayload.rowIndex);\n        hoverValueElement.textContent = value !== undefined ? value.toFixed(2) : '-';\n      }\n    }\n  }\n}\n\n// Reset the timeout\nhtmlGraphics.hoverTimeout = setTimeout(() => {\n  if (Date.now() - htmlGraphics.lastHoverTimestamp > 2000) {\n    hoverTimeElement.textContent = 'No hover data yet';\n    hoverValueElement.textContent = '-';\n    hoverStatusElement.textContent = 'Move cursor over chart points';\n    hoverStatusElement.classList.remove('active-hover');\n  }\n}, 2500);",
+        "onInit": "// Initialize the elements we'll update\nconst hoverTimeElement = htmlNode.getElementById('hover-time');\nconst hoverValueElement = htmlNode.getElementById('hover-value');\nconst hoverStatusElement = htmlNode.getElementById('hover-status');\n\n// Store timestamp of last hover to control display\nhtmlGraphics.lastHoverTimestamp = 0;\n\n// Function to reset display after period of inactivity\nfunction setupHoverTimeout() {\n  return setTimeout(() => {\n    if (Date.now() - htmlGraphics.lastHoverTimestamp > 2000) {\n      hoverTimeElement.textContent = 'No hover data yet';\n      hoverValueElement.textContent = '-';\n      hoverStatusElement.textContent = 'Move cursor over chart points';\n      hoverStatusElement.classList.remove('active-hover');\n    }\n  }, 2500);\n}\n\n// Initial timeout\nhtmlGraphics.hoverTimeout = setupHoverTimeout();",
+        "onInitOnResize": false,
+        "onRender": "// Sets the value from the first series on every refresh\nconst htmlgraphicsValue = htmlNode.getElementById('htmlgraphics-value');\n\nif (htmlgraphicsValue) {\n  const valueField = data.series[0]?.fields[1];\n  if (valueField) {\n    const length = valueField.values.length;\n    htmlgraphicsValue.textContent = valueField.values.get(length - 1);\n  } else {\n    htmlgraphicsValue.textContent = \"No data\"\n  }\n}\n",
+        "overflow": "visible",
+        "panelupdateOnMount": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull",
+            "last",
+            "firstNotNull",
+            "first",
+            "min",
+            "max",
+            "mean",
+            "median",
+            "sum",
+            "count",
+            "range",
+            "delta",
+            "step",
+            "diff",
+            "logmin",
+            "allIsZero",
+            "allIsNull",
+            "diffperc"
+          ]
+        },
+        "renderOnMount": true,
+        "rootCSS": "",
+        "useGrafanaScrollbar": true
+      },
+      "pluginVersion": "2.1.1",
+      "targets": [
+        {
+          "refId": "A"
+        }
+      ],
+      "title": "Panel Title",
+      "type": "gapit-htmlgraphics-panel"
+    },
+    {
+      "datasource": {
+        "type": "grafana-testdata-datasource",
+        "uid": "trlxrdZVk"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.3.2",
+      "targets": [
+        {
+          "refId": "A"
+        }
+      ],
+      "title": "Panel Title",
+      "type": "timeseries"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 40,
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "New dashboard",
+  "uid": "aehwqxcjnh0jkd",
+  "version": 3,
+  "weekStart": ""
+}

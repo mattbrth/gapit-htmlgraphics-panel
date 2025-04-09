@@ -265,4 +265,26 @@ export const plugin = new PanelPlugin<OptionsInterface>(HTMLPanel).useFieldConfi
       },
     });
   }
+  {
+    const category = ['On data hover'];
+    builder.addCustomEditor<CodeEditorOptionSettings, string>({
+      id: 'onDataHover',
+      path: 'onDataHover',
+      name: 'onDataHover',
+      description: `Code to execute when hovering over data points in other panels. Access hover data through the hoverPayload parameter.`,
+      editor: CodeEditorOption,
+      category,
+      defaultValue:
+        '// Log hover payload to verify it works\nconsole.log("DataHover handler executing with payload:", hoverPayload);\n\n' +
+        '// Check if we have hover data\nif (hoverPayload && hoverPayload.point) {\n' +
+        '  const hoverTimeElem = htmlNode.getElementById("hover-time");\n' +
+        '  if (hoverTimeElem && hoverPayload.point.time) {\n' +
+        '    const hoverTime = new Date(hoverPayload.point.time);\n' +
+        '    hoverTimeElem.textContent = hoverTime.toLocaleString();\n  }\n}',
+      settings: {
+        language: EditorLanguage.Javascript,
+        useHtmlGraphicsDeclarations: true,
+      },
+    });
+  }
 });

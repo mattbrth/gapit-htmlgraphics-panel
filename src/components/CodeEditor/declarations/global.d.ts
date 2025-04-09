@@ -6,6 +6,7 @@ import {
   PanelData,
   PanelProps,
   Registry,
+  DataHoverPayload,
 } from '@grafana/data';
 import {
   getLocationSrv as getLocationSrvType,
@@ -128,4 +129,5 @@ declare global {
      */
     fieldReducers: Registry<FieldReducerInfo>;
   };
+  const hoverPayload: DataHoverPayload;
 }

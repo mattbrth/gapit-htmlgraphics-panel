@@ -5,8 +5,13 @@ import {
   getFieldDisplayValues,
   GetFieldDisplayValuesOptions,
   PanelProps,
+  DataHoverEvent,
+  DataSelectEvent,
+  DataHoverPayload,
+  BusEventWithPayload,
 } from '@grafana/data';
 import { config, getTemplateSrv, getLocationSrv, locationService } from '@grafana/runtime';
+import { Subscription } from 'rxjs';
 import { OptionsInterface, CalcsMutation, ErrorObj, HTMLNodeElement } from 'types';
 import 'fonts.scss';
 import { parseJSON } from 'utils/parseJSON';
@@ -15,6 +20,7 @@ import { Errors } from 'components/Errors';
 import { addShadowRoot } from 'utils/addShadowRoot';
 import { triggerPanelupdate } from 'utils/events/panelupdate';
 import { triggerPanelwillunmount } from 'utils/events/panelwillunmount';
+
 import { addHtml } from 'utils/addHtml';
 import { CustomScrollbar } from '@grafana/ui';
 
@@ -237,7 +243,6 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
     this.updateError(addHtml(this.state.shadowContainerRef.current, this.props.options));
     this.onInit();
   }
-
   componentDidMount() {
     this.updateFieldDisplayValues();
     this.initialize();
@@ -248,6 +253,27 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
 
     if (this.props.options.panelupdateOnMount) {
       triggerPanelupdate(this.shadowElt);
+    }
+
+    // EXTENSIVE EVENT BUS DEBUGGING
+    console.error('DEBUGGING: Component mounted, examining event bus');
+    console.error('Event bus available:', !!this.props.eventBus);
+    console.error('Event bus object:', this.props.eventBus);
+
+    if (this.props.eventBus) {
+      console.error('Setting up DataHoverEvent subscription');
+
+      try {
+        // Use the imported DataHoverEvent class directly
+        this.dataHoverSubscription = this.props.eventBus.getStream(DataHoverEvent).subscribe((event) => {
+          console.error('DataHoverEvent received!', event);
+          this.handleDataHover(event);
+        });
+
+        console.error('DataHoverEvent subscription created successfully');
+      } catch (error) {
+        console.error('Error subscribing to DataHoverEvent:', error);
+      }
     }
 
     if (!_.isEqual(this.state.errors, this.errors)) {
@@ -277,6 +303,13 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
 
   componentWillUnmount() {
     triggerPanelwillunmount(this.shadowElt);
+
+    // Properly unsubscribe
+    if (this.dataHoverSubscription) {
+      console.error('Cleaning up DataHoverEvent subscription');
+      this.dataHoverSubscription.unsubscribe();
+      this.dataHoverSubscription = undefined;
+    }
   }
 
   updateError({ scope, isError, error }: ErrorObj) {
@@ -311,5 +344,143 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
         <Errors errors={this.state.errors} />
       </>
     );
+  }
+
+  onDataHover(hoverPayload: DataHoverPayload) {
+    console.error('DataHover handler executing', hoverPayload);
+
+    // First verify htmlNode is available
+    if (!htmlNode) {
+      console.error('htmlNode is not available');
+      return;
+    }
+
+    console.error('DataHover handler executing', hoverPayload);
+
+    // Now try to get the element
+    const hoverTimeElem = htmlNode.getElementById('hover-time');
+
+    // Make sure we have hover data and the element
+    if (hoverPayload && hoverPayload.point && hoverTimeElem) {
+      // Check if time is not null (important!)
+      if (hoverPayload.point.time != null) {
+        // Now TypeScript knows time is a number, not null
+        const hoverTime = new Date(hoverPayload.point.time);
+        console.error('Hover time:', hoverTime.toLocaleString());
+        hoverTimeElem.textContent = hoverTime.toLocaleString();
+      } else {
+        hoverTimeElem.textContent = 'No time data in hover event';
+        console.error('Time value is null in hover payload');
+      }
+    } else {
+      console.error('Missing data:', {
+        havePayload: !!hoverPayload,
+        havePoint: !!(hoverPayload && hoverPayload.point),
+        haveElement: !!hoverTimeElem,
+      });
+    }
+
+    const errorObj: ErrorObj = {
+      scope: 'onDataHover',
+      isError: false,
+    };
+
+    const { onDataHover } = this.props.options;
+
+    if (onDataHover) {
+      try {
+        const rawHtmlGraphics = this.getHtmlGraphics();
+        const { htmlNode, data, codeData, options, theme } = rawHtmlGraphics;
+        const htmlGraphics = this.htmlGraphics || rawHtmlGraphics;
+
+        const F = new Function(
+          'htmlNode',
+          'data',
+          'customProperties',
+          'codeData',
+          'options',
+          'theme',
+          'getTemplateSrv',
+          'getLocationSrv',
+          'htmlGraphics',
+          'hoverPayload',
+          onDataHover
+        );
+        // eslint-disable-next-line deprecation/deprecation
+        F(
+          htmlNode,
+          data,
+          codeData,
+          codeData,
+          options,
+          theme,
+          getTemplateSrv,
+          getLocationSrv,
+          htmlGraphics,
+          hoverPayload
+        );
+      } catch (e) {
+        errorObj.isError = true;
+        errorObj.error = e;
+        console.error(`onDataHover:`, e);
+      }
+    }
+
+    this.updateError(errorObj);
+  }
+
+  onDataHoverClear() {
+    // Optional: Implement hover clear logic
+    // This could run code to hide tooltips when not hovering
+  }
+
+  // Add these properties
+  dataHoverSubscription?: Subscription;
+  hoverPayload: DataHoverPayload | null = null;
+
+  // Add a method to handle the hover event
+  handleDataHover = (event: DataHoverEvent) => {
+    console.error('DataHoverEvent handler executing with payload:', event.payload);
+
+    if (this.props.options.onDataHover) {
+      this.executeDataHoverScript(event.payload);
+    }
+  };
+
+  // Add method to execute the onDataHover script
+  executeDataHoverScript(hoverPayload: DataHoverPayload) {
+    console.error('Executing onDataHover with payload:', hoverPayload);
+    const errorObj: ErrorObj = {
+      scope: 'onDataHover',
+      isError: false,
+    };
+
+    try {
+      const rawHtmlGraphics = this.getHtmlGraphics();
+      const { htmlNode, data, codeData, options, theme } = rawHtmlGraphics;
+      const htmlGraphics = this.htmlGraphics || rawHtmlGraphics;
+
+      const F = new Function(
+        'htmlNode',
+        'data',
+        'customProperties',
+        'codeData',
+        'options',
+        'theme',
+        'getTemplateSrv',
+        'getLocationSrv',
+        'htmlGraphics',
+        'hoverPayload',
+        this.props.options.onDataHover || ''
+      );
+
+      F(htmlNode, data, codeData, codeData, options, theme, getTemplateSrv, getLocationSrv, htmlGraphics, hoverPayload);
+    } catch (e) {
+      errorObj.isError = true;
+      errorObj.error = e;
+      console.error(`onDataHover execution error:`, e);
+    }
+
+    this.updateError(errorObj);
   }
 }

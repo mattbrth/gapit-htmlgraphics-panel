@@ -47,6 +47,7 @@ export interface OptionsInterface {
   importedPanelOptions: string;
   reduceOptions: ReduceDataOptions;
   calcsMutation: CalcsMutation;
+  onDataHover: string;
 }
 
 export interface ErrorObj {
