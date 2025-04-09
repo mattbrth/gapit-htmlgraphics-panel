@@ -6,12 +6,11 @@ import {
   GetFieldDisplayValuesOptions,
   PanelProps,
   DataHoverEvent,
-  DataSelectEvent,
   DataHoverPayload,
-  BusEventWithPayload,
+  DataHoverClearEvent,
 } from '@grafana/data';
 import { config, getTemplateSrv, getLocationSrv, locationService } from '@grafana/runtime';
-import { Subscription } from 'rxjs';
+import { Subscription, throttleTime } from 'rxjs';
 import { OptionsInterface, CalcsMutation, ErrorObj, HTMLNodeElement } from 'types';
 import 'fonts.scss';
 import { parseJSON } from 'utils/parseJSON';
@@ -57,9 +56,15 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
   shadowElt: HTMLDivElement | null = null;
   htmlGraphics: ReturnType<typeof this.getHtmlGraphics> | null = null;
 
-  // Add these new properties
-  latestHoverPayload: DataHoverPayload | null = null; // To store the last hover payload
+  // For hover handling
+  latestHoverPayload: DataHoverPayload | null = null;
+  isActivelyHovering = false; // New flag to track if hover is active
   clickListener: ((e: MouseEvent) => void) | null = null;
+  dataHoverSubscription?: Subscription;
+  dataHoverClearSubscription?: Subscription;
+  // For debounce protection
+  hoverClearTimerId?: number;
+  hoverClearDelay = 250; // ms delay after hover clear before
 
   getHtmlGraphics({ dynamicData = false, dynamicFieldDisplayValues = false, dynamicProps = false } = {}) {
     const data = dynamicData ? this.data : { ...this.props.data };
@@ -259,39 +264,51 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
       triggerPanelupdate(this.shadowElt);
     }
 
-    // Set up event listeners for keyboard and mouse
+    // Set up click listener
     this.clickListener = this.handleClick.bind(this);
-
     window.addEventListener('click', this.clickListener);
 
-    // Set up data hover subscription
+    // Set up data hover subscriptions
     if (this.props.eventBus) {
-      this.dataHoverSubscription = this.props.eventBus.getStream(DataHoverEvent).subscribe((event) => {
-        // Store the payload but don't execute handler yet
-        this.latestHoverPayload = event.payload;
-      });
+      // Subscribe to hover events
+      this.dataHoverSubscription = this.props.eventBus
+        .getStream(DataHoverEvent)
+        .pipe(throttleTime(50))
+        .subscribe((event) => {
+          // Log the hover event but don't store the payload
+          if (this.hoverClearTimerId === undefined) {
+            this.isActivelyHovering = true;
+            this.latestHoverPayload = event.payload;
+            console.error('Hover detected, payload stored:', this.latestHoverPayload);
+          } else {
+            console.error('Hover not yet cleared, ignoring new hover event');
+          }
+        });
+
+      // Subscribe to hover clear events
+      this.dataHoverClearSubscription = this.props.eventBus
+        .getStream(DataHoverClearEvent)
+        .pipe(throttleTime(50))
+        .subscribe(() => {
+          console.error('Hover clear event received');
+
+          // Immediately mark as not hovering
+          this.isActivelyHovering = false;
+
+          // Set a timer to ensure full reset before new hover actions
+          this.hoverClearTimerId = window.setTimeout(() => {
+            console.error('Hover state fully reset after delay');
+            // We could optionally clear the payload here too:
+            // this.latestHoverPayload = null;
+            this.hoverClearTimerId = undefined;
+          }, this.hoverClearDelay);
+        });
     }
 
     // EXTENSIVE EVENT BUS DEBUGGING
     console.error('DEBUGGING: Component mounted, examining event bus');
     console.error('Event bus available:', !!this.props.eventBus);
     console.error('Event bus object:', this.props.eventBus);
-
-    if (this.props.eventBus) {
-      console.error('Setting up DataHoverEvent subscription');
-
-      try {
-        // Use the imported DataHoverEvent class directly
-        this.dataHoverSubscription = this.props.eventBus.getStream(DataHoverEvent).subscribe((event) => {
-          console.error('DataHoverEvent received!', event);
-          this.handleDataHover(event);
-        });
-
-        console.error('DataHoverEvent subscription created successfully');
-      } catch (error) {
-        console.error('Error subscribing to DataHoverEvent:', error);
-      }
-    }
 
     if (!_.isEqual(this.state.errors, this.errors)) {
       this.setState({ errors: { ...this.errors } });
@@ -326,21 +343,32 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
       window.removeEventListener('click', this.clickListener);
     }
 
-    // Properly unsubscribe
+    // Clean up hover clear timer if active
+    if (this.hoverClearTimerId !== undefined) {
+      window.clearTimeout(this.hoverClearTimerId);
+      this.hoverClearTimerId = undefined;
+    }
+
+    // Clean up subscriptions
     if (this.dataHoverSubscription) {
-      console.error('Cleaning up DataHoverEvent subscription');
       this.dataHoverSubscription.unsubscribe();
-      this.dataHoverSubscription = undefined;
+    }
+
+    if (this.dataHoverClearSubscription) {
+      this.dataHoverClearSubscription.unsubscribe();
     }
   }
 
-  // Handle click events to execute onDataHover if ALT is pressed
+  // Handle click events to execute onDataHover if ALT is pressed AND actively hovering
   handleClick(e: MouseEvent) {
-    if (e.altKey && this.latestHoverPayload && this.props.options.onDataHover) {
-      console.log('ALT + click detected, executing onDataHover with payload:', this.latestHoverPayload);
+    if (e.altKey && this.isActivelyHovering && this.latestHoverPayload && this.props.options.onDataHover) {
+      console.error(
+        'ALT + click detected while hovering, executing onDataHover with payload:',
+        this.latestHoverPayload
+      );
       this.executeDataHoverScript(this.latestHoverPayload);
 
-      // Prevent default browser behavior for ALT+click if needed
+      // Prevent default browser behavior for ALT+click
       e.preventDefault();
     }
   }
@@ -467,10 +495,6 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
     // This could run code to hide tooltips when not hovering
   }
 
-  // Add these properties
-  dataHoverSubscription?: Subscription;
-  hoverPayload: DataHoverPayload | null = null;
-
   // Replace the old handleDataHover method with this one
   handleDataHover = (event: DataHoverEvent) => {
     // Just store the payload for later use
@@ -479,7 +503,6 @@ export class HTMLPanel extends PureComponent<Props, PanelState> {
 
   // Add method to execute the onDataHover script
   executeDataHoverScript(hoverPayload: DataHoverPayload) {
-    console.error('Executing onDataHover with payload:', hoverPayload);
     const errorObj: ErrorObj = {
       scope: 'onDataHover',
       isError: false,
